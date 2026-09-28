@@ -147,8 +147,9 @@ struct SquirrelApp {
         try? task.run()
       } else {
         NSApp.squirrelAppDelegate.setupRime()
-        NSApp.squirrelAppDelegate.startRime(fullCheck: false)
+        let deploying = NSApp.squirrelAppDelegate.startRime(fullCheck: false)
         NSApp.squirrelAppDelegate.loadSettings()
+        NSApp.squirrelAppDelegate.startWisdom(afterMaintenance: deploying)
         print("Squirrel reporting!")
       }
 

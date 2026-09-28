@@ -99,12 +99,25 @@ endif
 
 BUILD_SETTINGS += COMPILER_INDEX_STORE_ENABLE=YES
 
-release: $(DEPS_CHECK)
+# Wisdom-Weasel 的共用核心與橋接層（上一層的 mac/CMakeLists.txt），連結進鼠鬚管
+WISDOM_ROOT = ..
+WISDOM_BUILD_DIR = $(DERIVED_DATA_PATH)/wisdom
+# Xcode 專案用同一個位置找標頭與靜態庫
+BUILD_SETTINGS += WISDOM_ROOT="$(abspath $(WISDOM_ROOT))" WISDOM_BUILD_DIR="$(abspath $(WISDOM_BUILD_DIR))"
+
+.PHONY: wisdom
+
+wisdom: $(RIME_LIBRARY)
+	cmake -S $(WISDOM_ROOT)/mac -B $(WISDOM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DRIME_ROOT=$(CURDIR)/librime/dist \
+		-DCMAKE_OSX_DEPLOYMENT_TARGET=$(or $(MACOSX_DEPLOYMENT_TARGET),13.0)
+	cmake --build $(WISDOM_BUILD_DIR) --parallel --target wisdom_core wisdom_squirrel
+
+release: $(DEPS_CHECK) wisdom
 	mkdir -p $(DERIVED_DATA_PATH)
 	bash package/add_data_files
 	xcodebuild -project Squirrel.xcodeproj -configuration Release -scheme Squirrel -derivedDataPath $(DERIVED_DATA_PATH) $(BUILD_SETTINGS) build
 
-debug: $(DEPS_CHECK)
+debug: $(DEPS_CHECK) wisdom
 	mkdir -p $(DERIVED_DATA_PATH)
 	bash package/add_data_files
 	xcodebuild -project Squirrel.xcodeproj -configuration Debug -scheme Squirrel -derivedDataPath $(DERIVED_DATA_PATH)  $(BUILD_SETTINGS) build

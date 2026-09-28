@@ -62,6 +62,7 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate, SPUSta
   }
 
   func applicationWillTerminate(_ notification: Notification) {
+    WisdomBridge.shared.stop()
     // swiftlint:disable:next notification_center_detachment
     NotificationCenter.default.removeObserver(self)
     DistributedNotificationCenter.default().removeObserver(self)
@@ -81,8 +82,39 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate, SPUSta
   func deploy() {
     print("Start maintenance...")
     self.shutdownRime()
-    self.startRime(fullCheck: true)
+    let deploying = self.startRime(fullCheck: true)
     self.loadSettings()
+    reloadWisdomConfig(afterMaintenance: deploying)
+  }
+
+  // Wisdom-Weasel 的控制器：在 setupRime、startRime 之後呼叫一次
+  func startWisdom(afterMaintenance deploying: Bool) {
+    let bridge = WisdomBridge.shared
+    bridge.hideCandidates = { [weak self] in self?.panel?.hide() }
+    bridge.redeploy = { [weak self] in self?.deploy() }
+    // 網頁版設定在這個行程裡操作使用者詞典：關掉所有 session 放開詞典，按鍵時再重建
+    bridge.startMaintenance = { [weak self] in
+      self?.panel?.hide()
+      self?.rimeAPI.cleanup_all_sessions()
+    }
+    bridge.start(withUserDirectory: SquirrelApp.userDir.path(), sharedDirectory: Bundle.main.sharedSupportPath!)
+    if deploying {
+      reloadWisdomConfig(afterMaintenance: true)
+    }
+  }
+
+  // 重新讀 squirrel.yaml 的 llm/*；正在部署時等部署完成（部署可能改了設定）
+  func reloadWisdomConfig(afterMaintenance deploying: Bool) {
+    if !deploying {
+      WisdomBridge.shared.reloadConfig()
+      return
+    }
+    // 用輪詢而不是 join_maintenance_thread：網頁版設定的部署也在等同一個執行緒，不能兩邊同時 join
+    Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+      guard let self, !self.rimeAPI.is_maintenance_mode() else { return }
+      timer.invalidate()
+      WisdomBridge.shared.reloadConfig()
+    }
   }
 
   func syncUserData() {
@@ -158,12 +190,16 @@ final class SquirrelApplicationDelegate: NSObject, NSApplicationDelegate, SPUSta
     rimeAPI.setup(&squirrelTraits)
   }
 
-  func startRime(fullCheck: Bool) {
+  // 回傳是否開始部署（部署在背景執行）
+  @discardableResult
+  func startRime(fullCheck: Bool) -> Bool {
     print("Initializing la rime...")
     rimeAPI.initialize(nil)
     if rimeAPI.start_maintenance(fullCheck) {
       _ = rimeAPI.deploy_config_file("squirrel.yaml", "config_version")
+      return true
     }
+    return false
   }
 
   func loadSettings() {
@@ -403,6 +439,8 @@ private extension SquirrelApplicationDelegate {
 
   func shutdownRime() {
     config?.close()
+    // 停止精煉並存個人詞庫；重新部署後由 reloadWisdomConfig 重新載入
+    WisdomBridge.shared.stop()
     rimeAPI.finalize()
   }
 

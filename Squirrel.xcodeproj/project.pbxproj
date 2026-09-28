@@ -535,6 +535,7 @@
 				A464E3780F65263000148227 /* Copy 3rd-party Frameworks */,
 				2C6B9F992BCD083D00E327DF /* Copy Rime plugins */,
 				44DA7A1614DD581B00C1ED3B /* Copy Shared Support Files */,
+				170B061AB9C289A992EB21E1 /* Copy Wisdom web settings */,
 				4407F3CA14EC079A001329FE /* Copy opencc Files */,
 				44E21A8D16A653AC00C2B08F /* CopyFiles */,
 			);
@@ -602,6 +603,25 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		170B061AB9C289A992EB21E1 /* Copy Wisdom web settings */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Copy Wisdom web settings";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Wisdom-Weasel 的網頁版設定（WisdomBridge showSettings 從 Resources/web/settings 讀）\ndest=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/web/settings\"\nrm -rf \"$dest\"\nmkdir -p \"$(dirname \"$dest\")\"\ncp -R \"${WISDOM_ROOT}/web/settings\" \"$dest\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		8D11072C0486CEB800E47090 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -637,6 +657,7 @@
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1.1.2;
 				DEAD_CODE_STRIPPING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(FRAMEWORK_SEARCH_PATHS_QUOTED_FOR_TARGET_1)",
@@ -649,6 +670,10 @@
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(WISDOM_ROOT)/mac/squirrel",
+				);
 				INFOPLIST_FILE = resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Squirrel Input Method";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -669,7 +694,19 @@
 					"$(OTHER_CPLUSPLUSFLAGS_QUOTED_FOR_TARGET_1)",
 					"$(OTHER_CPLUSPLUSFLAGS_QUOTED_FOR_TARGET_2)",
 				);
-				OTHER_LDFLAGS = "-lrime.1";
+				OTHER_LDFLAGS = (
+					"-lrime.1",
+					"$(WISDOM_BUILD_DIR)/libwisdom_squirrel.a",
+					"$(WISDOM_BUILD_DIR)/libwisdom_core.a",
+					"-lcurl",
+					"-lc++",
+					"-framework",
+					Security,
+					"-framework",
+					WebKit,
+					"-framework",
+					UniformTypeIdentifiers,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = im.rime.inputmethod.Squirrel;
 				PRODUCT_NAME = Squirrel;
 				SDKROOT = macosx;
@@ -677,6 +714,8 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "sources/Squirrel-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+				WISDOM_BUILD_DIR = "$(SRCROOT)/build/wisdom";
+				WISDOM_ROOT = "$(SRCROOT)/..";
 				WRAPPER_EXTENSION = app;
 			};
 			name = Debug;
@@ -693,6 +732,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1.1.2;
 				DEAD_CODE_STRIPPING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(FRAMEWORK_SEARCH_PATHS_QUOTED_FOR_TARGET_1)",
@@ -704,6 +744,10 @@
 				FRAMEWORK_SEARCH_PATHS_QUOTED_FOR_TARGET_2 = "\"$(SRCROOT)\"";
 				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
 				GCC_MODEL_TUNING = G5;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(WISDOM_ROOT)/mac/squirrel",
+				);
 				INFOPLIST_FILE = resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Squirrel Input Method";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
@@ -724,13 +768,27 @@
 					"$(OTHER_CPLUSPLUSFLAGS_QUOTED_FOR_TARGET_1)",
 					"$(OTHER_CPLUSPLUSFLAGS_QUOTED_FOR_TARGET_2)",
 				);
-				OTHER_LDFLAGS = "-lrime.1";
+				OTHER_LDFLAGS = (
+					"-lrime.1",
+					"$(WISDOM_BUILD_DIR)/libwisdom_squirrel.a",
+					"$(WISDOM_BUILD_DIR)/libwisdom_core.a",
+					"-lcurl",
+					"-lc++",
+					"-framework",
+					Security,
+					"-framework",
+					WebKit,
+					"-framework",
+					UniformTypeIdentifiers,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = im.rime.inputmethod.Squirrel;
 				PRODUCT_NAME = Squirrel;
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "sources/Squirrel-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
+				WISDOM_BUILD_DIR = "$(SRCROOT)/build/wisdom";
+				WISDOM_ROOT = "$(SRCROOT)/..";
 				WRAPPER_EXTENSION = app;
 			};
 			name = Release;

@@ -241,6 +241,23 @@
           }
         }
       }
+    },
+    "Web settings..." : {
+      "comment" : "Menu item",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页版设置..."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網頁版設定..."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

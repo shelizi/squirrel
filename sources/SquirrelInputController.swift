@@ -47,6 +47,7 @@ final class SquirrelInputController: IMKInputController {
     self.client ?= sender as? IMKTextInput
     if let app = client?.bundleIdentifier(), currentApp != app {
       currentApp = app
+      WisdomBridge.shared.setClient(app, forSession: session)
       updateAppOptions()
     }
 
@@ -124,6 +125,10 @@ final class SquirrelInputController: IMKInputController {
   }
 
   func selectCandidate(_ index: Int) -> Bool {
+    if WisdomBridge.shared.selectCandidate(UInt(index), session: session) {
+      rimeUpdate()
+      return true
+    }
     let success = rimeAPI.select_candidate_on_current_page(session, index)
     if success {
       rimeUpdate()
@@ -221,6 +226,9 @@ final class SquirrelInputController: IMKInputController {
   override func deactivateServer(_ sender: Any!) {
     hidePalettes()
     commitComposition(sender)
+    if session != 0 {
+      WisdomBridge.shared.focusOut(session)
+    }
     client = nil
   }
 
@@ -232,10 +240,8 @@ final class SquirrelInputController: IMKInputController {
   override func commitComposition(_ sender: Any!) {
     self.client ?= sender as? IMKTextInput
     if session != 0 {
-      if let input = rimeAPI.get_input(session) {
-        commit(string: String(cString: input))
-        rimeAPI.clear_composition(session)
-      }
+      WisdomBridge.shared.commitComposition(session)
+      rimeConsumeCommittedText()
     }
   }
 
@@ -249,6 +255,8 @@ final class SquirrelInputController: IMKInputController {
     logDir.target = self
     let setting = NSMenuItem(title: NSLocalizedString("Settings...", comment: "Menu item"), action: #selector(openRimeFolder), keyEquivalent: "")
     setting.target = self
+    let webSettings = NSMenuItem(title: NSLocalizedString("Web settings...", comment: "Menu item"), action: #selector(openWebSettings), keyEquivalent: "")
+    webSettings.target = self
     let wiki = NSMenuItem(title: NSLocalizedString("Rime Wiki...", comment: "Menu item"), action: #selector(openWiki), keyEquivalent: "")
     wiki.target = self
     let update = NSMenuItem(title: NSLocalizedString("Check for updates...", comment: "Menu item"), action: #selector(checkForUpdates), keyEquivalent: "")
@@ -258,6 +266,7 @@ final class SquirrelInputController: IMKInputController {
     menu.addItem(deploy)
     menu.addItem(sync)
     menu.addItem(logDir)
+    menu.addItem(webSettings)
     menu.addItem(setting)
     menu.addItem(wiki)
     menu.addItem(update)
@@ -279,6 +288,10 @@ final class SquirrelInputController: IMKInputController {
 
   @objc func openRimeFolder() {
     NSApp.squirrelAppDelegate.openRimeFolder()
+  }
+
+  @objc func openWebSettings() {
+    WisdomBridge.shared.showSettings()
   }
 
   @objc func checkForUpdates() {
@@ -317,8 +330,8 @@ private extension SquirrelInputController {
     if chordKeyCount > 0 && session != 0 {
       // Chord typing releases are synthesized after the configured timeout.
       for i in 0..<chordKeyCount {
-        let handled = rimeAPI.process_key(session, Int32(chordKeyCodes[i]), Int32(chordModifiers[i] | kReleaseMask.rawValue))
-        if handled {
+        let result = WisdomBridge.shared.processKey(Int32(chordKeyCodes[i]), modifiers: Int32(chordModifiers[i] | kReleaseMask.rawValue), session: session)
+        if result.contains(.handled) {
           processedKeys = true
         }
       }
@@ -370,6 +383,10 @@ private extension SquirrelInputController {
     schemaId = ""
 
     if session != 0 {
+      // 背景預測完成時由橋接層在主執行緒呼叫
+      WisdomBridge.shared.addSession(session, client: app) { [weak self] in
+        self?.rimeUpdate()
+      }
       updateAppOptions()
     }
   }
@@ -393,6 +410,7 @@ private extension SquirrelInputController {
 
   func destroySession() {
     if session != 0 {
+      WisdomBridge.shared.removeSession(session)
       _ = rimeAPI.destroy_session(session)
       session = 0
     }
@@ -409,7 +427,8 @@ private extension SquirrelInputController {
       }
     }
 
-    let handled = rimeAPI.process_key(session, Int32(rimeKeycode), Int32(rimeModifiers))
+    // 中英混打、注音逐字選字與 LLM 候選的按鍵由控制器處理，其餘交給 Rime
+    let handled = WisdomBridge.shared.processKey(Int32(rimeKeycode), modifiers: Int32(rimeModifiers), session: session).contains(.handled)
 
     if !handled {
       let isVimBackInCommandMode = rimeKeycode == XK_Escape || ((rimeModifiers & kControlMask.rawValue != 0) && (rimeKeycode == XK_c || rimeKeycode == XK_C || rimeKeycode == XK_bracketleft))
@@ -435,12 +454,9 @@ private extension SquirrelInputController {
   }
 
   func rimeConsumeCommittedText() {
-    var commitText = RimeCommit.rimeStructInit()
-    if rimeAPI.get_commit(session, &commitText) {
-      if let text = commitText.text {
-        commit(string: String(cString: text))
-      }
-      _ = rimeAPI.free_commit(&commitText)
+    // LLM 候選、混打內容與 Rime 送出的字，依序插入
+    for text in WisdomBridge.shared.takeCommits(forSession: session) {
+      commit(string: text)
     }
   }
 
@@ -468,13 +484,34 @@ private extension SquirrelInputController {
 
     var ctx = RimeContext_stdbool.rimeStructInit()
     if rimeAPI.get_context(session, &ctx) {
+      // 每次更新都要呼叫（也負責記錄選字統計）。inline_candidate 時顯示轉好的字，像新注音
+      let wisdomPreedit = WisdomBridge.shared.preedit(forSession: session, zhuyinPreview: inlineCandidate)
       let preedit = ctx.composition.preedit.map({ String(cString: $0) }) ?? ""
 
       let start = String.Index(preedit.utf8.index(preedit.utf8.startIndex, offsetBy: Int(ctx.composition.sel_start)), within: preedit) ?? preedit.startIndex
       let end = String.Index(preedit.utf8.index(preedit.utf8.startIndex, offsetBy: Int(ctx.composition.sel_end)), within: preedit) ?? preedit.startIndex
       let caretPos = String.Index(preedit.utf8.index(preedit.utf8.startIndex, offsetBy: Int(ctx.composition.cursor_pos)), within: preedit) ?? preedit.startIndex
 
-      if inlineCandidate {
+      var panelPreedit = inlinePreedit ? "" : preedit
+      var panelSelRange = NSRange(location: start.utf16Offset(in: preedit), length: preedit.utf16.distance(from: start, to: end))
+      var panelCaretPos = caretPos.utf16Offset(in: preedit)
+      if let wisdomPreedit {
+        // 混打內容或注音預覽（位置是 UTF-16）
+        let text = wisdomPreedit.text
+        let length = text.utf16.count
+        let selStart = min(max(wisdomPreedit.selStart, 0), length)
+        let selEnd = min(max(wisdomPreedit.selEnd, selStart), length)
+        let range = NSRange(location: selStart, length: selEnd - selStart)
+        let caret = wisdomPreedit.cursor >= 0 ? min(wisdomPreedit.cursor, length) : length
+        if inlinePreedit || inlineCandidate {
+          show(preedit: text, selRange: range, caretPos: caret)
+        } else {
+          show(preedit: text.isEmpty ? "" : "　", selRange: NSRange(location: 0, length: 0), caretPos: 0)
+        }
+        panelPreedit = inlinePreedit ? "" : text
+        panelSelRange = range
+        panelCaretPos = caret
+      } else if inlineCandidate {
         var candidatePreview = ctx.commit_text_preview.map { String(cString: $0) } ?? ""
         let endOfCandidatePreview = candidatePreview.endIndex
         if inlinePreedit {
@@ -546,11 +583,24 @@ private extension SquirrelInputController {
         }
       }
       // swiftlint:enable identifier_name
+      // LLM 候選接在 Rime 候選後面（Tab、⇧2…）；Rime 沒在組字時也顯示
+      let predictions = WisdomBridge.shared.predictionCandidates()
+      if !predictions.isEmpty {
+        labels = (0..<numCandidates).map { $0 < labels.count ? labels[$0] : "\($0 + 1)" }
+        for prediction in predictions {
+          candidates.append(prediction.text)
+          comments.append(prediction.comment)
+          labels.append(prediction.label)
+        }
+        // 只有一個標籤時面板會把它當成逐字的標籤字串（"Tab" 會顯示成 "T"）
+        if labels.count == 1 {
+          labels.append("")
+        }
+      }
       let page = Int(ctx.menu.page_no)
       let lastPage = ctx.menu.is_last_page
 
-      let selRange = NSRange(location: start.utf16Offset(in: preedit), length: preedit.utf16.distance(from: start, to: end))
-      showPanel(preedit: inlinePreedit ? "" : preedit, selRange: selRange, caretPos: caretPos.utf16Offset(in: preedit),
+      showPanel(preedit: panelPreedit, selRange: panelSelRange, caretPos: panelCaretPos,
                 candidates: candidates, comments: comments, labels: labels, highlighted: Int(ctx.menu.highlighted_candidate_index),
                 page: page, lastPage: lastPage)
       _ = rimeAPI.free_context(&ctx)

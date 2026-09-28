@@ -535,7 +535,7 @@
 				A464E3780F65263000148227 /* Copy 3rd-party Frameworks */,
 				2C6B9F992BCD083D00E327DF /* Copy Rime plugins */,
 				44DA7A1614DD581B00C1ED3B /* Copy Shared Support Files */,
-				170B061AB9C289A992EB21E1 /* Copy Wisdom web settings */,
+				170B061AB9C289A992EB21E1 /* Copy Wisdom files */,
 				4407F3CA14EC079A001329FE /* Copy opencc Files */,
 				44E21A8D16A653AC00C2B08F /* CopyFiles */,
 			);
@@ -604,7 +604,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		170B061AB9C289A992EB21E1 /* Copy Wisdom web settings */ = {
+		170B061AB9C289A992EB21E1 /* Copy Wisdom files */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -612,12 +612,12 @@
 			);
 			inputPaths = (
 			);
-			name = "Copy Wisdom web settings";
+			name = "Copy Wisdom files";
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Wisdom-Weasel 的網頁版設定（WisdomBridge showSettings 從 Resources/web/settings 讀）\ndest=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/web/settings\"\nrm -rf \"$dest\"\nmkdir -p \"$(dirname \"$dest\")\"\ncp -R \"${WISDOM_ROOT}/web/settings\" \"$dest\"\n";
+			shellScript = "set -e\n# Wisdom-Weasel 的網頁版設定（WisdomBridge showSettings 從 Resources/web/settings 讀）\ndest=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/web/settings\"\nrm -rf \"$dest\"\nmkdir -p \"$(dirname \"$dest\")\"\ncp -R \"${WISDOM_ROOT}/web/settings\" \"$dest\"\n# 本機 LLM 推理程式（Makefile 有 llama.cpp 時才建）：與鼠鬚管同一資料夾，llama.cpp 放 Frameworks\nhost=\"${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}/WisdomLLMHost\"\nrm -f \"$host\"\nif [ -x \"${WISDOM_BUILD_DIR}/stage/WisdomLLMHost\" ] && [ -n \"${WISDOM_LLAMA_ROOT}\" ]; then\n  cp \"${WISDOM_BUILD_DIR}/stage/WisdomLLMHost\" \"$host\"\n  # 只放執行時載入的名稱（libxxx.0.dylib，安裝名稱是 @rpath），複製實體檔案；libllama.0.5.0.dylib 這類完整版本號的不放\n  for lib in \"${WISDOM_LLAMA_ROOT}\"/lib/lib*.0.dylib; do\n    case \"$(basename \"$lib\")\" in\n      *.*.*.dylib) continue ;;\n    esac\n    cp -L \"$lib\" \"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/\"\n  done\nfi\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

@@ -102,15 +102,24 @@ BUILD_SETTINGS += COMPILER_INDEX_STORE_ENABLE=YES
 # Wisdom-Weasel 的共用核心與橋接層（上一層的 mac/CMakeLists.txt），連結進鼠鬚管
 WISDOM_ROOT = ..
 WISDOM_BUILD_DIR = $(DERIVED_DATA_PATH)/wisdom
-# Xcode 專案用同一個位置找標頭與靜態庫
+# llama.cpp（Wisdom-Weasel 的 mac/get-llama-runtime.sh 下載的位置）：有的話一起打包本機 LLM 推理程式
+WISDOM_LLAMA_ROOT = $(wildcard $(WISDOM_ROOT)/output/llama-mac)
+# Xcode 專案用同一個位置找標頭、靜態庫與要放進 app 的推理程式
 BUILD_SETTINGS += WISDOM_ROOT="$(abspath $(WISDOM_ROOT))" WISDOM_BUILD_DIR="$(abspath $(WISDOM_BUILD_DIR))"
+BUILD_SETTINGS += WISDOM_LLAMA_ROOT="$(if $(WISDOM_LLAMA_ROOT),$(abspath $(WISDOM_LLAMA_ROOT)))"
 
 .PHONY: wisdom
 
 wisdom: $(RIME_LIBRARY)
 	cmake -S $(WISDOM_ROOT)/mac -B $(WISDOM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DRIME_ROOT=$(CURDIR)/librime/dist \
-		-DCMAKE_OSX_DEPLOYMENT_TARGET=$(or $(MACOSX_DEPLOYMENT_TARGET),13.0)
+		-DCMAKE_OSX_DEPLOYMENT_TARGET=$(or $(MACOSX_DEPLOYMENT_TARGET),13.0) \
+		-DLLAMA_ROOT="$(if $(WISDOM_LLAMA_ROOT),$(abspath $(WISDOM_LLAMA_ROOT)))"
 	cmake --build $(WISDOM_BUILD_DIR) --parallel --target wisdom_core wisdom_squirrel
+	rm -rf $(WISDOM_BUILD_DIR)/stage
+ifneq ($(WISDOM_LLAMA_ROOT),)
+	cmake --build $(WISDOM_BUILD_DIR) --parallel --target WisdomLLMHost
+	cmake --install $(WISDOM_BUILD_DIR) --prefix $(WISDOM_BUILD_DIR)/stage
+endif
 
 release: $(DEPS_CHECK) wisdom
 	mkdir -p $(DERIVED_DATA_PATH)
